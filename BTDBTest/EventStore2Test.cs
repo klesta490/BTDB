@@ -9,48 +9,125 @@ using BTDB.ODBLayer;
 
 namespace BTDBTest
 {
-    
+    public interface IEvent
+    {
+        ulong Id { get; set; }
+        ulong ParentEventId { get; set; }
+        ulong UserId { get; set; }
+        DateTime Time { get; set; }
+        Guid UniqueGuid { get; set; }
+        ulong ImpersonatorUserId { get; set; }
+        ulong ImpersonatorCompanyId { get; set; }
+    }
+    public class Event : IEvent
+    {
+        public ulong Id { get; set; }
+        public ulong ParentEventId { get; set; }
+        public ulong UserId { get; set; }
+        public DateTime Time { get; set; }
+        public Guid UniqueGuid { get; set; }
+        public ulong ImpersonatorUserId { get; set; }
+        public ulong ImpersonatorCompanyId { get; set; }
+    }
+    public class DbDriveInfo
+    {
+        public string Name { get; set; }
+        public long TotalSize { get; set; }
+        public long AvailableFreeSpace { get; set; }
+    }
+    public class DiscInfoAdded : Event
+    {
+        public IList<DbDriveInfo> Infos { get; set; }
+        public string InstanceId { get; set; }
+    }
 
     public class EventStore2Test
     {
-        public class TransactionKey
-        {
-        }
-
-        public class TransactionMigration
-        {
-            public TransactionKey TransactionKey;
-        }
-        public class ComplexObject
-        {
-            public IDictionary<ulong, IList<TransactionMigration>> MigrationRecords { get; set; }
-        }
-
+       
         [Fact]
         public void DeserializeComplexObject()
         {
             var serializer = new EventSerializer();
+
             bool hasMetadata;
-            var obj = new ComplexObject
+            var obj = new ObjectWithEnum { State = StateEnum.Alive };
+            var ev = new DiscInfoAdded()
             {
-                MigrationRecords = new Dictionary<ulong, IList<TransactionMigration>>()
+                InstanceId = "neco1",
+                Infos = new List<DbDriveInfo>()
                 {
-                    { 1, new List<TransactionMigration> {new TransactionMigration()
+                    new DbDriveInfo
                     {
-                        TransactionKey = new TransactionKey()
-                    }}}
+                        AvailableFreeSpace = 555, Name = "C", TotalSize = 444
+                    }
                 }
             };
-            var meta = serializer.Serialize(out hasMetadata, obj).ToAsyncSafe();
-            serializer.ProcessMetadataLog(meta);
-            var data = serializer.Serialize(out hasMetadata, obj);
+
+            var objMeta = serializer.Serialize(out hasMetadata, obj).ToAsyncSafe();
+            Assert.True(hasMetadata);
+            serializer.ProcessMetadataLog(objMeta);
+            var objData = serializer.Serialize(out hasMetadata, obj);
+            Assert.False(hasMetadata);
+
+            var evMeta = serializer.Serialize(out hasMetadata, ev).ToAsyncSafe();
+            Assert.True(hasMetadata);
+            serializer.ProcessMetadataLog(evMeta);
+            var evData = serializer.Serialize(out hasMetadata, ev);
+            Assert.False(hasMetadata);
+
 
             var deserializer = new EventDeserializer();
             object obj2;
-            Assert.False(deserializer.Deserialize(out obj2, data));
-            deserializer.ProcessMetadataLog(meta);
-            Assert.True(deserializer.Deserialize(out obj2, data));
+            object ev2;
+            Assert.False(deserializer.Deserialize(out obj2, objData));
+            Assert.False(deserializer.Deserialize(out ev2, evData));
+            deserializer.ProcessMetadataLog(objMeta);
+            deserializer.ProcessMetadataLog(evMeta);
+            Assert.True(deserializer.Deserialize(out obj2, objData));
             Assert.Equal(obj, obj2);
+            
+            Assert.True(deserializer.Deserialize(out ev2, evData));
+            Assert.Equal(ev, ev2);
+        }
+
+
+        [Fact]
+        public void DeserializeComplexObject2()
+        {
+            var serializer = new EventSerializer();
+
+            bool hasMetadata;
+            var obj = new ObjectWithEnum { State = StateEnum.Alive };
+            var ev = new ObjectWithList()
+            {
+                Items = new List<int>() { 1}
+            };
+
+            var objMeta = serializer.Serialize(out hasMetadata, obj).ToAsyncSafe();
+            Assert.True(hasMetadata);
+            serializer.ProcessMetadataLog(objMeta);
+            var objData = serializer.Serialize(out hasMetadata, obj);
+            Assert.False(hasMetadata);
+
+            var evMeta = serializer.Serialize(out hasMetadata, ev).ToAsyncSafe();
+            Assert.True(hasMetadata);
+            serializer.ProcessMetadataLog(evMeta);
+            var evData = serializer.Serialize(out hasMetadata, ev);
+            Assert.False(hasMetadata);
+
+
+            var deserializer = new EventDeserializer();
+            object obj2;
+            object ev2;
+            Assert.False(deserializer.Deserialize(out obj2, objData));
+            Assert.False(deserializer.Deserialize(out ev2, evData));
+            deserializer.ProcessMetadataLog(objMeta);
+            deserializer.ProcessMetadataLog(evMeta);
+            Assert.True(deserializer.Deserialize(out obj2, objData));
+            Assert.Equal(obj, obj2);
+
+            Assert.True(deserializer.Deserialize(out ev2, evData));
+            Assert.Equal(ev, ev2);
         }
 
         [Fact]
