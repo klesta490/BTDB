@@ -1,5 +1,9 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+
+*.nupkg binary
+*.dll binary
+*.pdb binary
 
 # Custom for Visual Studio
 *.cs     diff=csharp
